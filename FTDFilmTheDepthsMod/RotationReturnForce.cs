@@ -4,7 +4,7 @@ using UnityEngine;
 namespace FTDFilmTheDepthsMod
 {
     /// <summary>
-    /// God forbid this needs to be used.
+    /// God forbid this be used.
     /// </summary>
     public class RotationReturnForce : RotationReturnAbstract
     {

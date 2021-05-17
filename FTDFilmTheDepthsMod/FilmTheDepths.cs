@@ -23,7 +23,8 @@ namespace FTDFilmTheDepthsMod
 {
     public class Main : GamePlugin
     {
-        public static cCameraControl cameraControl = null;
+        public static cCameraControl cameraControl = null; // Cache camera control.
+        // Track change in rotation of camera subjects.
         public static Quaternion lastRotation = Quaternion.identity;
         public static IRotationReturn rotation = null;
 
@@ -55,7 +56,7 @@ namespace FTDFilmTheDepthsMod
     }
 
     /// <summary>
-    /// Record intent to rotate mouse.
+    /// Record user intent to move mouse.
     /// </summary>
     [HarmonyPatch(typeof(MouseLook), "Update")]
     class MouseLook_Update_Patch
@@ -66,9 +67,8 @@ namespace FTDFilmTheDepthsMod
         static bool Prefix(MouseLook __instance, MViewAndControl ____options, float ___minimumY, float ___maximumY)
         {
             cCameraControl ccc = Main.cameraControl;
-            if (ccc == null)
-                return true;
-            FocusCameraSettings fcs = ccc._externalCameraFocusSettings;
+            FocusCameraSettings fcs = ccc?._externalCameraFocusSettings;
+            // Note: If ccc or fcs is null, first condition fails.
             if (fcs?.PositionOfFocus != null && fcs.PositionOfFocus.Valid &&
                 (ccc.CameraState == enumCameraState.detached ||
                 ccc.CameraState == enumCameraState.unparented) &&
@@ -113,7 +113,7 @@ namespace FTDFilmTheDepthsMod
             IPositionReturn pof = settings.PositionOfFocus;
             switch (pof)
             {
-                case PositionReturnBlock prb:
+                case PositionReturnBlock prb: // FocusCameraSettings were directed to some construct's block.
                     FieldInfo fib = typeof(PositionReturnBlock).GetField("_b", BindingFlags.NonPublic | BindingFlags.Instance);
                     IBlockForReturns b = (IBlockForReturns)fib.GetValue(prb);
                     if (b is Block block)
@@ -126,7 +126,7 @@ namespace FTDFilmTheDepthsMod
                         Main.lastRotation = Main.rotation.Rotation;
                     }
                     break;
-                case PositionReturnForce prf:
+                case PositionReturnForce prf: // FocusCameraSettings were created from the strategic view.
                     FieldInfo fif = typeof(PositionReturnForce).GetField("_f", BindingFlags.NonPublic | BindingFlags.Instance);
                     Force f = (Force)fif.GetValue(prf);
                     if (f.C != null)
@@ -140,17 +140,18 @@ namespace FTDFilmTheDepthsMod
                     else
                     {
                         // This produces results hysterically bad for filming.
+                        // Not sure if this case is possible.
                         Main.rotation = new RotationReturnForce(f);
                         Main.lastRotation = Main.rotation.Rotation;
                     }
                     break;
-                case PositionReturnTransform prt:
+                case PositionReturnTransform prt: // FocusCameraSettings were directed to a projectile.
                     FieldInfo fit = typeof(PositionReturnTransform).GetField("_t", BindingFlags.NonPublic | BindingFlags.Instance);
                     Transform t = (Transform)fit.GetValue(prt);
                     Main.rotation = new RotationReturnTransform(t);
                     Main.lastRotation = Main.rotation.Rotation;
                     break;
-                default:
+                default: // Other focus subjects won't be tracked rotation-wise. (Don't think there are any others.)
                     break;
             }
         }
@@ -173,7 +174,7 @@ namespace FTDFilmTheDepthsMod
     }
 
     /// <summary>
-    /// Move external camera to focus on a subject.
+    /// Move external camera when focusing on a subject.
     /// </summary>
     [HarmonyPatch(typeof(cCameraControl), "IEFocusExternalCameraOnThis")]
     class cCameraControl_IEFocusExternalCameraOnThis_Patch
@@ -197,7 +198,7 @@ namespace FTDFilmTheDepthsMod
                 __instance.CancelExternalCameraFocus();
             else if (____mouseLookY.axes == enumRotationAxes.MouseXAndY)
             {
-                // TODO: Don't rotate if top down strategic map.
+                // Check if user is doing top-down strategic map and don't rotate if so.
                 bool topdown = FleetControlGUI.Instance.MenuActive && ____options.TopDownViewLocked;
                 if (!topdown)
                 {
@@ -212,18 +213,21 @@ namespace FTDFilmTheDepthsMod
                     }
                     else
                         Main.rotation = null;
+                    // TODO: Smoothing speed setting.
                     xRotVel = Mathf.Lerp(xRotVel, MouseLook_Update_Patch.xIntent, 0.02f);
                     yRotVel = Mathf.Lerp(yRotVel, MouseLook_Update_Patch.yIntent, 0.02f);
                     ____mouseLookY.rotationX = ____mouseLookY.transform.localEulerAngles.y + xChange + xRotVel;
                     ____mouseLookY.rotationY += yRotVel;
-                    // -89 and 89 are hard-coded/unmodified values from source.
+                    // The numbers -89 and 89 are hard-coded/unmodified values from vanilla.
                     ____mouseLookY.rotationY = Mathf.Clamp(____mouseLookY.rotationY, -89f, 89f);
                     ____mouseLookY.transform.localEulerAngles = new Vector3(-____mouseLookY.rotationY, ____mouseLookY.rotationX, 0f);
+                    // Since DoingStrategicFocus inhibits zoom in/out, switch to another method.
                     fcs.DistanceMethod = fcs.DistanceMethod == DistanceChangeMethod.DoingStrategicFocus ?
                         DistanceChangeMethod.MaintainCurrentFocusDistance : fcs.DistanceMethod;
                 }
-                else
+                else // Disallow focus camera zoom when in strategic view.
                     fcs.DistanceMethod = DistanceChangeMethod.DoingStrategicFocus;
+                // Done with mouse input for this frame, so remove it.
                 MouseLook_Update_Patch.xIntent = MouseLook_Update_Patch.yIntent = 0f;
 
                 // Copied from vanilla function.
@@ -240,10 +244,12 @@ namespace FTDFilmTheDepthsMod
                 }
 
                 __instance.Cam.position = b; // Removed lerp.
+                // Again copied from vanilla function.
                 float axis = Input.GetAxis("Mouse ScrollWheel");
                 if (____zoomIn.IsKey(KeyInputEventType.Held, ModifierAllows.AllowShift)
                     || axis > 0f)
                 {
+                    // TODO: Possibly check keybinding instead?
                     int num = OptionsListener.ShiftHeld ? 4 : 1;
                     ____options.FocusCameraDistance -= 0.1f * (float)num;
                     ____options.FocusCameraDistance *= 1f - 0.02f * (float)num;
