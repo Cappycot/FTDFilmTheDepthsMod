@@ -1,0 +1,8 @@
+{
+    "name": "Film The Depths",
+    "version": "0.1.0",
+    "filename": "FilmTheDepthsMod.dll",
+    "gameversion": "3.2.9",
+    "depends": [],
+    "conflicts": []
+}

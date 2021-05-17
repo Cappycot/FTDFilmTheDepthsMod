@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.31205.134
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FTDFilmTheDepthsMod", "FTDFilmTheDepthsMod\FTDFilmTheDepthsMod.csproj", "{87B005CE-9585-4625-B8FF-2DFF3649416A}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{87B005CE-9585-4625-B8FF-2DFF3649416A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{87B005CE-9585-4625-B8FF-2DFF3649416A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{87B005CE-9585-4625-B8FF-2DFF3649416A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{87B005CE-9585-4625-B8FF-2DFF3649416A}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {C8922247-7B42-40E2-9684-5636F3FE5BDC}
+	EndGlobalSection
+EndGlobal

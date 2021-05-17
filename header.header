@@ -1,0 +1,9 @@
+{
+  "Authors": "Authors include Cappycot",
+  "Version": "00000000-0000-0000-0000-000000000000",
+  "ComponentId": {
+    "Guid": "a540575d-402e-45b9-bd00-e4efd96479d3",
+    "Name": "Film The Depths"
+  },
+  "Description": "Enhances camera behavior for a better experience"
+}
