@@ -27,6 +27,8 @@ namespace FTDFilmTheDepthsMod
         // Track change in rotation of camera subjects.
         public static Quaternion lastRotation = Quaternion.identity;
         public static IRotationReturn rotation = null;
+        // Test Construct-Target View
+        public static MainConstruct subject = null;
 
         public string name { get; } = "Film The Depths";
         public Version version { get; } = new Version(0, 1, 0);
@@ -109,10 +111,19 @@ namespace FTDFilmTheDepthsMod
         {
             cCameraControl_IEFocusExternalCameraOnThis_Patch.xRotVel = 0f;
             cCameraControl_IEFocusExternalCameraOnThis_Patch.yRotVel = 0f;
+            Main.subject = null;
             Main.rotation = null;
             IPositionReturn pof = settings.PositionOfFocus;
             switch (pof)
             {
+                case PositionAndRotationReturnConstruct parrc: // I can't find where this is created...
+                    FieldInfo fic = typeof(PositionAndRotationReturnConstruct).GetField("_c", BindingFlags.NonPublic | BindingFlags.Instance);
+                    AllConstruct c = (AllConstruct)fic.GetValue(parrc);
+                    Main.rotation = parrc;
+                    Main.lastRotation = parrc.Rotation;
+                    if (c is MainConstruct mc)
+                        Main.subject = mc;
+                    break;
                 case PositionReturnBlock prb: // FocusCameraSettings were directed to some construct's block.
                     FieldInfo fib = typeof(PositionReturnBlock).GetField("_b", BindingFlags.NonPublic | BindingFlags.Instance);
                     IBlockForReturns b = (IBlockForReturns)fib.GetValue(prb);
@@ -124,6 +135,7 @@ namespace FTDFilmTheDepthsMod
                         else // Should not be the case.
                             Main.rotation = new RotationReturnBlock(b);
                         Main.lastRotation = Main.rotation.Rotation;
+                        Main.subject = block.GetConstructable() as MainConstruct;
                     }
                     break;
                 case PositionReturnForce prf: // FocusCameraSettings were created from the strategic view.
@@ -136,13 +148,16 @@ namespace FTDFilmTheDepthsMod
                         settings.PositionOfFocus = yeah;
                         Main.rotation = yeah;
                         Main.lastRotation = yeah.Rotation;
+                        Main.subject = f.C;
                     }
                     else
                     {
                         // This produces results hysterically bad for filming.
-                        // Not sure if this case is possible.
+                        // This only should happen if the camera focuses on an out-of-play force.
                         Main.rotation = new RotationReturnForce(f);
                         Main.lastRotation = Main.rotation.Rotation;
+                        if (f.IsInPlay)
+                            AdvLogger.LogInfo("PositionOfFocus set to a PositionReturnForce in play, but there is no construct object!");
                     }
                     break;
                 case PositionReturnTransform prt: // FocusCameraSettings were directed to a projectile.
@@ -152,6 +167,7 @@ namespace FTDFilmTheDepthsMod
                     Main.lastRotation = Main.rotation.Rotation;
                     break;
                 default: // Other focus subjects won't be tracked rotation-wise. (Don't think there are any others.)
+                    AdvLogger.LogInfo(string.Format("Received a unknown IPositionReturn: {0}", pof.GetType().FullName));
                     break;
             }
         }
@@ -183,6 +199,18 @@ namespace FTDFilmTheDepthsMod
         public static float yRotVel = 0f;
         // private static float lastTime = 1.0f;
 
+        private static MainConstruct getTarget(MainConstruct mc)
+        {
+            var ais = mc.iBlockTypeStorage.MainframeStore;
+            if (mc.Destroyed || ais.Count <= 0)
+                return null;
+            var target = ais.Blocks[0].Node.targetManager.GetPrimaryTarget();
+            if (target != null && target.C.GetTargetableType() == enumTargetableType.Constructable)
+                return target.C as MainConstruct;
+            else
+                return null;
+        }
+
         static bool Prefix(cCameraControl __instance, KeyDef ____zoomIn, KeyDef ____zoomOut, MViewAndControl ____options, MouseLook ____mouseLookY)
         {
             /*if (lastTime != Time.timeScale)
@@ -199,28 +227,45 @@ namespace FTDFilmTheDepthsMod
             else if (____mouseLookY.axes == enumRotationAxes.MouseXAndY)
             {
                 // Check if user is doing top-down strategic map and don't rotate if so.
+                Vector3 myPos = fcs.PositionOfFocus.Position;
                 bool topdown = FleetControlGUI.Instance.MenuActive && ____options.TopDownViewLocked;
                 if (!topdown)
                 {
-                    // Record rotational change if any.
-                    // Unity euler angles are Z, X, Y.
-                    float xChange = 0f;
-                    if (Main.rotation != null && Main.rotation.Valid)
+                    // TODO: Integrate Ace Combat style camera into new camera mode.
+                    /*MainConstruct target = Main.subject != null ? getTarget(Main.subject) : null;
+                    if (target != null && !target.Destroyed)
                     {
-                        Quaternion rot = Main.rotation.Rotation;
-                        xChange = rot.eulerAngles.y - Main.lastRotation.eulerAngles.y;
-                        Main.lastRotation = rot;
+                        Vector3 up = Main.subject.SafeUp;
+                        myPos += up * Main.subject.AllBasics.GetActualHeight();
+                        Vector3 diff = target.SafePosition - myPos;
+                        Quaternion look = Quaternion.LookRotation(diff, up);
+                        // Vector3 ea = look.eulerAngles;
+                        ____mouseLookY.transform.localEulerAngles = look.eulerAngles; // new Vector3(ea.x, ea.y, 0f);
+                        ____mouseLookY.rotationX = ____mouseLookY.transform.localEulerAngles.y;
+                        ____mouseLookY.rotationY = 0f;
                     }
                     else
-                        Main.rotation = null;
-                    // TODO: Smoothing speed setting.
-                    xRotVel = Mathf.Lerp(xRotVel, MouseLook_Update_Patch.xIntent, 0.02f);
-                    yRotVel = Mathf.Lerp(yRotVel, MouseLook_Update_Patch.yIntent, 0.02f);
-                    ____mouseLookY.rotationX = ____mouseLookY.transform.localEulerAngles.y + xChange + xRotVel;
-                    ____mouseLookY.rotationY += yRotVel;
-                    // The numbers -89 and 89 are hard-coded/unmodified values from vanilla.
-                    ____mouseLookY.rotationY = Mathf.Clamp(____mouseLookY.rotationY, -89f, 89f);
-                    ____mouseLookY.transform.localEulerAngles = new Vector3(-____mouseLookY.rotationY, ____mouseLookY.rotationX, 0f);
+                    {*/
+                        // Record rotational change if any.
+                        // Unity euler angles are Z, X, Y.
+                        float xChange = 0f;
+                        if (Main.rotation != null && Main.rotation.Valid)
+                        {
+                            Quaternion rot = Main.rotation.Rotation;
+                            xChange = rot.eulerAngles.y - Main.lastRotation.eulerAngles.y;
+                            Main.lastRotation = rot;
+                        }
+                        else
+                            Main.rotation = null;
+                        // TODO: Smoothing speed setting.
+                        xRotVel = Mathf.Lerp(xRotVel, MouseLook_Update_Patch.xIntent, 0.02f);
+                        yRotVel = Mathf.Lerp(yRotVel, MouseLook_Update_Patch.yIntent, 0.02f);
+                        ____mouseLookY.rotationX = ____mouseLookY.transform.localEulerAngles.y + xChange + xRotVel;
+                        ____mouseLookY.rotationY += yRotVel;
+                        // The numbers -89 and 89 are hard-coded/unmodified values from vanilla.
+                        ____mouseLookY.rotationY = Mathf.Clamp(____mouseLookY.rotationY, -89f, 89f);
+                        ____mouseLookY.transform.localEulerAngles = new Vector3(-____mouseLookY.rotationY, ____mouseLookY.rotationX, 0f);
+                    //}
                     // Since DoingStrategicFocus inhibits zoom in/out, switch to another method.
                     fcs.DistanceMethod = fcs.DistanceMethod == DistanceChangeMethod.DoingStrategicFocus ?
                         DistanceChangeMethod.MaintainCurrentFocusDistance : fcs.DistanceMethod;
@@ -231,7 +276,7 @@ namespace FTDFilmTheDepthsMod
                 MouseLook_Update_Patch.xIntent = MouseLook_Update_Patch.yIntent = 0f;
 
                 // Copied from vanilla function.
-                Vector3 focus = fcs.PositionOfFocus.Position;
+                Vector3 focus = myPos;
                 Vector3 forward = cam.forward;
                 Vector3 b = focus - forward * fcs.Distance;
 
